@@ -6,10 +6,13 @@ import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
+import android.view.ContextMenu;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -26,13 +29,21 @@ import java.util.List;
 
 public class MainActivity extends ActionBarActivity {
 
+    /* Declaración para el número de control para el menu */
+    private static final int EDIT = 0, DELETE = 1;
+
+    private static final String TAG = "MainActivity";
+
     EditText txt_name, txt_phone, txt_email, txt_address;
     List<Contact> Contacts = new ArrayList<Contact>();
     ImageView imgViewContact;
     ListView contactListView;
     Uri imageUri = Uri.parse("android.resource://mx.e2g.agenda/" + R.drawable.default_user);
     DatabaseHandler dbHandler;
-
+    int longClickedItemIdex;
+    ArrayAdapter<Contact> contactAdapter;
+    boolean editMode = false;
+    Button btn_add;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,39 +58,81 @@ public class MainActivity extends ActionBarActivity {
         imgViewContact = (ImageView) findViewById(R.id.imgViewContact);
         dbHandler = new DatabaseHandler(getApplicationContext());
 
+        /*
+            Inicio menu flotante a la lista
+         */
+        registerForContextMenu(contactListView);
+
+        contactListView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener(){
+
+            @Override
+            public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
+                longClickedItemIdex = position;
+                Log.d(TAG, " contactListView --- AdapterView.OnItemLongClickListener,  position : " + String.valueOf(position));
+                return false;
+            }
+        });
+
+        /*
+            Fin menu flotante
+         */
+
         TabHost tabHost = (TabHost) findViewById(R.id.tabHost);
 
         tabHost.setup();
 
         TabHost.TabSpec tabSpec = tabHost.newTabSpec("creator");
         tabSpec.setContent(R.id.tabCrear);
-        tabSpec.setIndicator("Creator");
+        tabSpec.setIndicator("Crear");
         tabHost.addTab(tabSpec);
 
         tabSpec = tabHost.newTabSpec("list");
         tabSpec.setContent(R.id.tabList);
-        tabSpec.setIndicator("List");
+        tabSpec.setIndicator("Lista");
         tabHost.addTab(tabSpec);
 
-        final Button btn_add = (Button) findViewById(R.id.btnAdd);
+         btn_add = (Button) findViewById(R.id.btnAdd);
         // Add an action listener
         btn_add.setOnClickListener( new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 // Add growl message text
 
-                Contact contact = new Contact(dbHandler.getContactsCount(), txt_name.getText().toString(), txt_phone.getText().toString(), txt_email.getText().toString(), txt_address.getText().toString(), imageUri);
-                if (dbHandler.existContactById(contact) == true){
-                    Toast.makeText(getApplicationContext(),"No se guardo, el contacto '" + txt_name.getText().toString() + "' ya existe!!!", Toast.LENGTH_SHORT).show();
-                } else {
-                    dbHandler.createContact(contact);
-                    Contacts.add(contact);
+                if (editMode == false) {
+                    Contact contact = new Contact(dbHandler.getContactsCount(), txt_name.getText().toString(), txt_phone.getText().toString(), txt_email.getText().toString(), txt_address.getText().toString(), imageUri);
+                    if (dbHandler.existContactByName(contact) == true) {
+                        Toast.makeText(getApplicationContext(), "No se guardo, el contacto '" + txt_name.getText().toString() + "' ya existe!!!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        dbHandler.createContact(contact);
+                        Contacts.add(contact);
                 /* Contacts.add(new Contact(0,txt_name.getText().toString(),txt_phone.getText().toString(),txt_email.getText().toString(),txt_address.getText().toString(), imageUri)); */
                /* Ya no es necesario porque el Adapter se encarga de llenar el array
                 *populateList();
                 */
+                        // Tenemos que notificar que hubo un cambio en la lista
+                        contactAdapter.notifyDataSetChanged();
+                        cleanText();
+                        Toast.makeText(getApplicationContext(), "El contacto '" + contact.getName().toString() + "' se creo con éxito", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+
+                    Contact contact = Contacts.get(longClickedItemIdex);
+                    Log.d(TAG, " Update name: " + contact.getName());
+
+                    contact.setName(txt_name.getText().toString());
+                    contact.setPhone(txt_phone.getText().toString());
+                    contact.setEmail(txt_email.getText().toString());
+                    contact.setAddress(txt_address.getText().toString());
+                    contact.setImgUri(imageUri);
+                    dbHandler.updateContact(contact);
+                    /* Me falta acutalizar el list Contacts */
+                    Contacts.remove(longClickedItemIdex);
+                    Contacts.add(contact);
+                    contactAdapter.notifyDataSetChanged();
                     cleanText();
-                    Toast.makeText(getApplicationContext(), "El contacto '" + txt_name.getText().toString() + "' se creo con éxito", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getApplicationContext(), "El contacto '" + contact.getName().toString() + "' se modifico con éxito", Toast.LENGTH_SHORT).show();
+                    editMode = false;
+                    btn_add.setText("CREAR CONTACTO");
                 }
             }
         });
@@ -131,6 +184,44 @@ public class MainActivity extends ActionBarActivity {
 
     }
 
+    /*
+        Metodo para la creación del menú
+     */
+    public void onCreateContextMenu(ContextMenu menu, View view, ContextMenu.ContextMenuInfo menuInfo){
+        super.onCreateContextMenu(menu,view,menuInfo);
+
+        menu.setHeaderIcon(R.drawable.pencil_icon);
+        menu.setHeaderTitle("Contact Options");
+        menu.add(menu.NONE, EDIT, menu.NONE, "Editar contacto");
+        menu.add(menu.NONE, DELETE, menu.NONE, "Borrar contacto");
+
+    }
+
+    public boolean onContextItemSelected(MenuItem item) {
+        switch (item.getItemId()){
+            case EDIT:
+                // TODO: Implement edit contact
+                Contact contact = Contacts.get(longClickedItemIdex);
+                txt_name.setText(contact.getName());
+                txt_phone.setText(contact.getPhone());
+                txt_email.setText(contact.getEmail());
+                txt_address.setText(contact.getAddress());
+                txt_name.setFocusable(true);
+                btn_add.setText("ACTUALIZAR CONTACTO");
+                editMode = true;
+                break;
+            case DELETE:
+
+                dbHandler.deleteContact(Contacts.get(longClickedItemIdex));
+                Contacts.remove(longClickedItemIdex);
+                contactAdapter.notifyDataSetChanged();
+                Toast.makeText(getApplicationContext(), "El contacto se elimino con éxito", Toast.LENGTH_SHORT).show();
+                break;
+        }
+
+        return super.onContextItemSelected(item);
+    }
+
     public void onActivityResult(int reqCode, int resCode, Intent data){
         if (resCode == RESULT_OK){
             if (reqCode == 1) {
@@ -141,8 +232,8 @@ public class MainActivity extends ActionBarActivity {
     }
 
     private void populateList(){
-        ArrayAdapter<Contact> adapter = new  ContactListAdapter();
-        contactListView.setAdapter(adapter);
+        contactAdapter = new  ContactListAdapter();
+        contactListView.setAdapter(contactAdapter);
         /*
         * setListViewHeightBasedOnItems(contactListView);
         * Esto no es necesario si se pone la opcion
@@ -155,8 +246,8 @@ public class MainActivity extends ActionBarActivity {
         txt_phone.setText("");
         txt_email.setText("");
         txt_address.setText("");
-        imgViewContact.setImageURI(imageUri);
-        imgViewContact.refreshDrawableState();
+        imgViewContact.setImageResource(R.drawable.default_user);
+        imageUri = Uri.parse("android.resource://mx.e2g.agenda/" + R.drawable.default_user);
         txt_name.setFocusable(true);
     }
 

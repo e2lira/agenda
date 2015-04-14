@@ -52,10 +52,10 @@ public class DatabaseHandler extends SQLiteOpenHelper{
         SQLiteDatabase db = getWritableDatabase();
         Log.d(TAG," Nombre: " + contact.getName());
         ContentValues values = new ContentValues();
-        values.put(KEY_NAME, contact.getName());
-        values.put(KEY_PHONE, contact.getPhone());
-        values.put(KEY_EMAIL, contact.getEmail());
-        values.put(KEY_ADDRESS, contact.getAddress());
+        values.put(KEY_NAME, contact.getName().trim());
+        values.put(KEY_PHONE, contact.getPhone().trim());
+        values.put(KEY_EMAIL, contact.getEmail().trim());
+        values.put(KEY_ADDRESS, contact.getAddress().trim());
         values.put(KEY_IMAGEURI, contact.getImgUri().toString()); // Es necesario obtener el .toString()
 
         db.insert(TABLE_CONTACTS, null, values);
@@ -75,12 +75,15 @@ public class DatabaseHandler extends SQLiteOpenHelper{
         return contact;
     }
 
-    public boolean existContactById(Contact contact){
+    public boolean existContactByName(Contact contact){
         SQLiteDatabase db = getReadableDatabase();
-        Cursor cursor = db.query(TABLE_CONTACTS, new String[] { KEY_ID,KEY_NAME,KEY_PHONE,KEY_EMAIL,KEY_ADDRESS,KEY_IMAGEURI}, KEY_NAME.toLowerCase() + "=?", new String[] { contact.getName().toString().trim().toLowerCase() }, null, null, null, null );
-
-        if (cursor != null){
-            cursor.moveToFirst();
+        Log.d(TAG," existContactByName Nombre: " + contact.getName());
+        Cursor cursor = db.query(TABLE_CONTACTS, new String[] { KEY_ID,KEY_NAME,KEY_PHONE,KEY_EMAIL,KEY_ADDRESS,KEY_IMAGEURI}, KEY_NAME + "=?", new String[] { contact.getName().toString().trim() }, null, null, null, null );
+        //Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_CONTACTS + " WHERE " + KEY_NAME + "=?" , new String[] { contact.getName().toString().trim().toLowerCase() });
+        int count = cursor.getCount();
+        Log.d(TAG, " existContactByName count: " + count);
+        if (cursor.moveToFirst()){
+            Log.d(TAG, " existContactByName cursor: " + cursor.getString(1));
             return true;
         } else {
             return false;
@@ -91,6 +94,7 @@ public class DatabaseHandler extends SQLiteOpenHelper{
         SQLiteDatabase db = getWritableDatabase();
 
         db.delete(TABLE_CONTACTS, KEY_ID + "=?", new String[] { String.valueOf(contact.getId())});
+        Log.d(TAG, "Borrando al contacto : " + contact.getName());
         db.close();
     }
 
